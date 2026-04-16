@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+infra/node_modules/
+infra/bin/
+infra/*.js
+infra/*.d.ts

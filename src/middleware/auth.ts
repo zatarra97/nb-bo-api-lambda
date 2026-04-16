@@ -1,0 +1,106 @@
+import { Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
+import jwksRsa from "jwks-rsa";
+import { getCurrentInvoke } from "@vendia/serverless-express";
+import { AuthenticatedRequest } from "../types";
+
+let jwksClient: jwksRsa.JwksClient | null = null;
+
+function getJwksClient(): jwksRsa.JwksClient {
+  if (!jwksClient) {
+    const region = process.env.COGNITO_REGION || "eu-north-1";
+    const userPoolId = process.env.COGNITO_USER_POOL_ID || "";
+    jwksClient = jwksRsa({
+      jwksUri: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`,
+      cache: true,
+      cacheMaxEntries: 5,
+      cacheMaxAge: 600000,
+    });
+  }
+  return jwksClient;
+}
+
+function getSigningKey(kid: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    getJwksClient().getSigningKey(kid, (err, key) => {
+      if (err) return reject(err);
+      resolve(key!.getPublicKey());
+    });
+  });
+}
+
+function parseGroups(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String);
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      if (raw.startsWith("[") && raw.endsWith("]")) {
+        return raw.slice(1, -1).split(",").map((s) => s.trim()).filter(Boolean);
+      }
+      return raw ? [raw] : [];
+    }
+  }
+  return [];
+}
+
+export function authMiddleware(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  const authMode = process.env.AUTH_MODE || "local";
+
+  if (authMode === "apigw") {
+    const { event } = getCurrentInvoke();
+    const claims = event?.requestContext?.authorizer?.jwt?.claims;
+    if (!claims) {
+      res.status(401).json({ error: "Non autenticato" });
+      return;
+    }
+    const groups = parseGroups(claims["cognito:groups"]);
+    req.user = {
+      email: claims.email || claims["cognito:username"] || "",
+      groups,
+      isAdmin: groups.includes("Admin"),
+    };
+    next();
+  } else {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Token mancante" });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const decoded = jwt.decode(token, { complete: true });
+    if (!decoded || !decoded.header.kid) {
+      res.status(401).json({ error: "Token non valido" });
+      return;
+    }
+
+    getSigningKey(decoded.header.kid)
+      .then((signingKey) => {
+        const region = process.env.COGNITO_REGION || "eu-north-1";
+        const userPoolId = process.env.COGNITO_USER_POOL_ID || "";
+        const issuer = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`;
+
+        const payload = jwt.verify(token, signingKey, {
+          issuer,
+          algorithms: ["RS256"],
+        }) as Record<string, unknown>;
+
+        const groups = parseGroups(payload["cognito:groups"]);
+        req.user = {
+          email: (payload.email as string) || (payload["cognito:username"] as string) || "",
+          groups,
+          isAdmin: groups.includes("Admin"),
+        };
+        next();
+      })
+      .catch(() => {
+        res.status(401).json({ error: "Token non valido o scaduto" });
+      });
+  }
+}

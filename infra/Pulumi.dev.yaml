@@ -1,0 +1,17 @@
+config:
+  # StackReference al progetto weddingcut per ottenere l'endpoint RDS
+  # Formato Pulumi Cloud: "<organization>/weddingcut/dev"
+  # Formato backend locale: "weddingcut/dev"
+  nb:weddingcutStackRef: "weddingcut/dev"
+
+  # Credenziali RDS (stesso utente del weddingcut)
+  nb:dbUsername: "admin"
+  nb:dbPassword:
+    secure: <SOSTITUIRE_CON_VALORE_CIFRATO>
+
+  # Schema DB (nuovo schema nb sullo stesso RDS)
+  nb:dbName: "nb"
+
+  # CORS — aggiornare dopo il primo deploy con l'URL CloudFront reale
+  # Esempio: "https://abc123.cloudfront.net,http://localhost:5175"
+  nb:allowedOrigins: "http://localhost:5175"

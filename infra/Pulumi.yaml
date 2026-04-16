@@ -1,0 +1,6 @@
+name: nb
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: NB — Sito vetrina cantante. Lambda, API Gateway, S3, CloudFront, Cognito.
