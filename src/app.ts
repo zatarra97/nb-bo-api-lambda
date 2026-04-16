@@ -7,6 +7,7 @@ import pressRoutes from "./routes/press.routes";
 import photoAlbumsRoutes from "./routes/photo-albums.routes";
 import musicAlbumsRoutes from "./routes/music-albums.routes";
 import mediaRoutes from "./routes/media.routes";
+import contentBlocksRoutes from "./routes/content-blocks.routes";
 
 export const app = express();
 
@@ -35,5 +36,6 @@ app.use(pressRoutes);
 app.use(photoAlbumsRoutes);
 app.use(musicAlbumsRoutes);
 app.use(mediaRoutes);
+app.use(contentBlocksRoutes);
 
 app.use(errorHandler);

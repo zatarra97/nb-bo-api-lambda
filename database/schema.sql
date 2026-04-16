@@ -97,3 +97,20 @@ CREATE TABLE IF NOT EXISTS album_musicali (
   updatedAt          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_ordine (ordine)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- content_blocks — blocchi di contenuto testuale generici (About, ecc.)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS content_blocks (
+  id           INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  publicId     VARCHAR(36)  NOT NULL UNIQUE,
+  sezione      VARCHAR(100) NOT NULL,
+  titoloIT     VARCHAR(255),
+  titoloEN     VARCHAR(255),
+  contenutoIT  LONGTEXT,
+  contenutoEN  LONGTEXT,
+  ordine       SMALLINT UNSIGNED DEFAULT 0,
+  createdAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updatedAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_sezione_ordine (sezione, ordine)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
