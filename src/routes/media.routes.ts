@@ -14,7 +14,7 @@ const PUBLIC_URL_BASE = `https://${BUCKET}.s3.${REGION}.amazonaws.com`;
 
 const s3 = new S3Client({ region: REGION });
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif"];
 const ALLOWED_AUDIO_TYPES = ["audio/mpeg", "audio/mp3", "audio/m4a", "audio/aac", "audio/ogg"];
 const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_AUDIO_TYPES];
 
