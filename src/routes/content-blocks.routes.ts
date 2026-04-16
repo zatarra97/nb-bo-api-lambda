@@ -21,7 +21,7 @@ router.get("/content-blocks", async (req: Request, res: Response, next: NextFunc
       sql += " WHERE sezione = ?";
       params.push(sezione);
     }
-    sql += " ORDER BY ordine ASC, createdAt ASC";
+    sql += " ORDER BY createdAt ASC";
     const [rows] = await pool.execute(sql, params) as [any[], any];
     res.json(rows);
   } catch (err) {
@@ -42,7 +42,7 @@ router.get("/admin/content-blocks", adminOnly, async (req: Request, res: Respons
       sql += " WHERE sezione = ?";
       params.push(sezione);
     }
-    sql += " ORDER BY sezione ASC, ordine ASC, createdAt ASC";
+    sql += " ORDER BY sezione ASC, createdAt ASC";
     const [rows] = await pool.execute(sql, params) as [any[], any];
     res.json(rows);
   } catch (err) {
@@ -72,15 +72,15 @@ router.get("/admin/content-blocks/:publicId", adminOnly, async (req: Request, re
 // ---------------------------------------------------------------------------
 router.post("/admin/content-blocks", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { sezione, titoloIT, titoloEN, contenutoIT, contenutoEN, ordine } = req.body;
+    const { sezione, titoloIT, titoloEN, contenutoIT, contenutoEN } = req.body;
     if (!sezione?.trim()) return next(createHttpError(400, "sezione è obbligatoria"));
 
     const pool = getPool();
     const publicId = randomUUID();
     await pool.execute(
-      `INSERT INTO content_blocks (publicId, sezione, titoloIT, titoloEN, contenutoIT, contenutoEN, ordine)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [publicId, sezione.trim(), titoloIT || null, titoloEN || null, contenutoIT || null, contenutoEN || null, ordine ?? 0]
+      `INSERT INTO content_blocks (publicId, sezione, titoloIT, titoloEN, contenutoIT, contenutoEN)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [publicId, sezione.trim(), titoloIT || null, titoloEN || null, contenutoIT || null, contenutoEN || null]
     );
     const [rows] = await pool.execute("SELECT * FROM content_blocks WHERE publicId = ?", [publicId]) as [any[], any];
     res.status(201).json(rows[0]);
@@ -94,14 +94,14 @@ router.post("/admin/content-blocks", adminOnly, async (req: Request, res: Respon
 // ---------------------------------------------------------------------------
 router.put("/admin/content-blocks/:publicId", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { sezione, titoloIT, titoloEN, contenutoIT, contenutoEN, ordine } = req.body;
+    const { sezione, titoloIT, titoloEN, contenutoIT, contenutoEN } = req.body;
     if (!sezione?.trim()) return next(createHttpError(400, "sezione è obbligatoria"));
 
     const pool = getPool();
     const [result] = await pool.execute(
-      `UPDATE content_blocks SET sezione=?, titoloIT=?, titoloEN=?, contenutoIT=?, contenutoEN=?, ordine=?
+      `UPDATE content_blocks SET sezione=?, titoloIT=?, titoloEN=?, contenutoIT=?, contenutoEN=?
        WHERE publicId = ?`,
-      [sezione.trim(), titoloIT || null, titoloEN || null, contenutoIT || null, contenutoEN || null, ordine ?? 0, req.params.publicId]
+      [sezione.trim(), titoloIT || null, titoloEN || null, contenutoIT || null, contenutoEN || null, req.params.publicId]
     ) as [any, any];
     if (result.affectedRows === 0) return next(createHttpError(404, "Blocco non trovato"));
     const [rows] = await pool.execute("SELECT * FROM content_blocks WHERE publicId = ?", [req.params.publicId]) as [any[], any];

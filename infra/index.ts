@@ -100,7 +100,7 @@ new aws.iam.RolePolicy("nb-lambda-s3-policy", {
     Statement: [{
       Effect: "Allow",
       Action: ["s3:PutObject", "s3:DeleteObject"],
-      Resource: "arn:aws:s3:::nb-media/*",
+      Resource: "arn:aws:s3:::nb-media-zatarra97/*",
     }],
   }),
 });
@@ -128,7 +128,7 @@ const lambdaFunction = new aws.lambda.Function("nb-api", {
       CORS_FRONTEND: allowedOriginsRaw,
       NODE_ENV: "production",
       AUTH_MODE: "apigw",
-      S3_MEDIA_BUCKET: "nb-media",
+      S3_MEDIA_BUCKET: "nb-media-zatarra97",
       S3_REGION: "eu-north-1",
     },
   },
@@ -177,6 +177,7 @@ const publicRoutes: Array<{ key: string; routeKey: string }> = [
   { key: "photo-albums",    routeKey: "GET /photo-albums" },
   { key: "photo-albums-detail", routeKey: "GET /photo-albums/{proxy+}" },
   { key: "music-albums",    routeKey: "GET /music-albums" },
+  { key: "content-blocks", routeKey: "GET /content-blocks" },
 ];
 
 for (const { key, routeKey } of publicRoutes) {
@@ -214,7 +215,7 @@ new aws.lambda.Permission("nb-api-lambda-perm", {
 // S3 Media Bucket — immagini, audio preview (accesso pubblico in lettura)
 // ---------------------------------------------------------------------------
 const mediaBucket = new aws.s3.BucketV2("nb-media-bucket", {
-  bucket: "nb-media",
+  bucket: "nb-media-zatarra97",
   tags: { Project: "nb", Environment: stack },
 });
 

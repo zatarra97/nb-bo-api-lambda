@@ -109,8 +109,7 @@ CREATE TABLE IF NOT EXISTS content_blocks (
   titoloEN     VARCHAR(255),
   contenutoIT  LONGTEXT,
   contenutoEN  LONGTEXT,
-  ordine       SMALLINT UNSIGNED DEFAULT 0,
   createdAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updatedAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_sezione_ordine (sezione, ordine)
+  INDEX idx_sezione (sezione)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
