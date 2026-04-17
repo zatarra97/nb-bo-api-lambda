@@ -105,6 +105,53 @@ new aws.iam.RolePolicy("nb-lambda-s3-policy", {
   }),
 });
 
+new aws.iam.RolePolicy("nb-lambda-ses-policy", {
+  role: lambdaRole.name,
+  policy: JSON.stringify({
+    Version: "2012-10-17",
+    Statement: [{
+      Effect: "Allow",
+      Action: ["ses:SendEmail", "ses:SendRawEmail", "sesv2:SendEmail"],
+      Resource: "*",
+    }],
+  }),
+});
+
+// ---------------------------------------------------------------------------
+// SES — Configuration Set (monitoraggio bounce/complaint)
+// ---------------------------------------------------------------------------
+const sesConfigSet = new aws.ses.ConfigurationSet("nb-ses-config", {
+  name: "nb-transactional",
+});
+
+// ---------------------------------------------------------------------------
+// SES — Domain Identity (da configurare con il dominio reale)
+// Aggiungere il dominio con: pulumi config set sesDomain <tuo-dominio>
+// Poi: pulumi up → verranno generati i token DKIM da aggiungere al DNS Aruba
+// ---------------------------------------------------------------------------
+const sesDomain = config.get("sesDomain");
+
+let sesDkimTokens: pulumi.Output<string[]> | undefined;
+
+if (sesDomain) {
+  const domainIdentity = new aws.ses.DomainIdentity("nb-ses-domain", {
+    domain: sesDomain,
+  });
+
+  const dkim = new aws.ses.DomainDkim("nb-ses-dkim", {
+    domain: domainIdentity.domain,
+  });
+
+  sesDkimTokens = dkim.dkimTokens;
+
+  // MAIL FROM personalizzato (es. mail.tuodominio.com)
+  new aws.ses.MailFrom("nb-ses-mail-from", {
+    domain: domainIdentity.domain,
+    mailFromDomain: pulumi.interpolate`mail.${sesDomain}`,
+    behaviorOnMxFailure: "UseDefaultValue",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Lambda Function
 // ---------------------------------------------------------------------------
@@ -130,6 +177,8 @@ const lambdaFunction = new aws.lambda.Function("nb-api", {
       AUTH_MODE: "apigw",
       S3_MEDIA_BUCKET: "nb-media-zatarra97",
       S3_REGION: "eu-north-1",
+      SES_REGION: "eu-north-1",
+      SES_FROM_EMAIL: sesDomain ? `newsletter@${sesDomain}` : config.get("sesFromEmail") || "newsletter@example.com",
     },
   },
   tags: { Project: "nb", Environment: stack },
@@ -388,3 +437,6 @@ export const frontendCiAccessKeyId = frontendDeployerKey.id;
 export const frontendCiSecretAccessKey = pulumi.secret(frontendDeployerKey.secret);
 export const backendCiAccessKeyId = backendDeployerKey.id;
 export const backendCiSecretAccessKey = pulumi.secret(backendDeployerKey.secret);
+
+// Token DKIM da aggiungere come record CNAME nel DNS Aruba (formato: <token>._domainkey.<dominio>)
+export const sesDkimTokens = sesDkimTokens;

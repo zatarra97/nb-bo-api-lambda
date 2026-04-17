@@ -9,6 +9,8 @@ await build({
   format: "cjs",
   sourcemap: true,
   minify: false,
+  jsx: "automatic",
+  jsxImportSource: "react",
 });
 
 console.log("Build completata -> dist/handler.js");
