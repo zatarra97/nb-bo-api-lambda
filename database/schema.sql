@@ -113,3 +113,17 @@ CREATE TABLE IF NOT EXISTS content_blocks (
   updatedAt    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_sezione (sezione)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- subscribers — iscritti alla newsletter
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS subscribers (
+  id         INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  publicId   VARCHAR(36)  NOT NULL UNIQUE,
+  email      VARCHAR(255) NOT NULL UNIQUE,
+  token      VARCHAR(64)  NOT NULL UNIQUE,
+  confermato TINYINT(1)   NOT NULL DEFAULT 0,
+  createdAt  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updatedAt  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_token (token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

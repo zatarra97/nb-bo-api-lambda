@@ -131,7 +131,7 @@ const sesConfigSet = new aws.ses.ConfigurationSet("nb-ses-config", {
 // ---------------------------------------------------------------------------
 const sesDomain = config.get("sesDomain");
 
-let sesDkimTokens: pulumi.Output<string[]> | undefined;
+let dkimTokensOutput: pulumi.Output<string[]> | undefined;
 
 if (sesDomain) {
   const domainIdentity = new aws.ses.DomainIdentity("nb-ses-domain", {
@@ -142,7 +142,7 @@ if (sesDomain) {
     domain: domainIdentity.domain,
   });
 
-  sesDkimTokens = dkim.dkimTokens;
+  dkimTokensOutput = dkim.dkimTokens;
 
   // MAIL FROM personalizzato (es. mail.tuodominio.com)
   new aws.ses.MailFrom("nb-ses-mail-from", {
@@ -179,6 +179,7 @@ const lambdaFunction = new aws.lambda.Function("nb-api", {
       S3_REGION: "eu-north-1",
       SES_REGION: "eu-north-1",
       SES_FROM_EMAIL: sesDomain ? `newsletter@${sesDomain}` : config.get("sesFromEmail") || "newsletter@example.com",
+      FRONTEND_URL: config.get("frontendUrl") || "http://localhost:5175",
     },
   },
   tags: { Project: "nb", Environment: stack },
@@ -226,7 +227,10 @@ const publicRoutes: Array<{ key: string; routeKey: string }> = [
   { key: "photo-albums",    routeKey: "GET /photo-albums" },
   { key: "photo-albums-detail", routeKey: "GET /photo-albums/{proxy+}" },
   { key: "music-albums",    routeKey: "GET /music-albums" },
-  { key: "content-blocks", routeKey: "GET /content-blocks" },
+  { key: "content-blocks",  routeKey: "GET /content-blocks" },
+  { key: "subscribe",       routeKey: "POST /subscribe" },
+  { key: "confirm",         routeKey: "GET /confirm" },
+  { key: "unsubscribe",     routeKey: "DELETE /unsubscribe" },
 ];
 
 for (const { key, routeKey } of publicRoutes) {
@@ -439,4 +443,4 @@ export const backendCiAccessKeyId = backendDeployerKey.id;
 export const backendCiSecretAccessKey = pulumi.secret(backendDeployerKey.secret);
 
 // Token DKIM da aggiungere come record CNAME nel DNS Aruba (formato: <token>._domainkey.<dominio>)
-export const sesDkimTokens = sesDkimTokens;
+export const sesDkimTokens = dkimTokensOutput;
