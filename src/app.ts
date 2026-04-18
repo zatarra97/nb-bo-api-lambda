@@ -9,6 +9,7 @@ import musicAlbumsRoutes from "./routes/music-albums.routes";
 import mediaRoutes from "./routes/media.routes";
 import contentBlocksRoutes from "./routes/content-blocks.routes";
 import subscribersRoutes from "./routes/subscribers.routes";
+import downloadImagesRoutes from "./routes/download-images.routes";
 
 export const app = express();
 
@@ -39,5 +40,6 @@ app.use(musicAlbumsRoutes);
 app.use(mediaRoutes);
 app.use(contentBlocksRoutes);
 app.use(subscribersRoutes);
+app.use(downloadImagesRoutes);
 
 app.use(errorHandler);

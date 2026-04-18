@@ -228,6 +228,7 @@ const publicRoutes: Array<{ key: string; routeKey: string }> = [
   { key: "photo-albums-detail", routeKey: "GET /photo-albums/{proxy+}" },
   { key: "music-albums",    routeKey: "GET /music-albums" },
   { key: "content-blocks",  routeKey: "GET /content-blocks" },
+  { key: "public-download-images", routeKey: "GET /public-download-images" },
   { key: "subscribe",       routeKey: "POST /subscribe" },
   { key: "confirm",         routeKey: "GET /confirm" },
   { key: "unsubscribe",     routeKey: "DELETE /unsubscribe" },

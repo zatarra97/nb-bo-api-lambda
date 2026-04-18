@@ -1,10 +1,13 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
+import * as React from "react";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getPool } from "../db/pool";
 import { authMiddleware } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 import { createHttpError } from "../middleware/error-handler";
+import { sendEmail } from "../../emails/send";
+import { NuovoContenutoEmail } from "../../emails/templates/nuovo-contenuto";
 
 const router = Router();
 const adminOnly = [authMiddleware, requireAdmin];
@@ -84,6 +87,7 @@ router.get("/admin/music-albums/:publicId", adminOnly, async (req: Request, res:
 
 // ---------------------------------------------------------------------------
 // POST /admin/music-albums — crea album musicale
+// Se `ordine` non è fornito viene calcolato come MAX(ordine)+1.
 // ---------------------------------------------------------------------------
 router.post("/admin/music-albums", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -93,13 +97,21 @@ router.post("/admin/music-albums", adminOnly, async (req: Request, res: Response
     const publicId = randomUUID();
     const pool = getPool();
 
+    let ordineValue = ordine;
+    if (ordineValue === undefined || ordineValue === null) {
+      const [[{ next: nextOrdine }]] = await pool.execute(
+        "SELECT COALESCE(MAX(ordine), 0) + 1 AS `next` FROM album_musicali"
+      ) as [any[], any];
+      ordineValue = nextOrdine;
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO album_musicali (publicId, titolo, fotoS3Path, streamingLinks, audioPreviewS3Path, ordine)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [
         publicId, titolo, fotoS3Path ?? null,
         streamingLinks ? JSON.stringify(streamingLinks) : null,
-        audioPreviewS3Path ?? null, ordine ?? 0,
+        audioPreviewS3Path ?? null, ordineValue,
       ]
     ) as [any, any];
 
@@ -112,6 +124,7 @@ router.post("/admin/music-albums", adminOnly, async (req: Request, res: Response
 
 // ---------------------------------------------------------------------------
 // PUT /admin/music-albums/:publicId — aggiorna album musicale
+// `ordine` omesso → preservato (riordino via PATCH /reorder).
 // ---------------------------------------------------------------------------
 router.put("/admin/music-albums/:publicId", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -126,13 +139,15 @@ router.put("/admin/music-albums/:publicId", adminOnly, async (req: Request, res:
 
     if (!existing.length) return next(createHttpError(404, "Album musicale non trovato"));
 
+    const ordineParam = ordine === undefined || ordine === null ? null : ordine;
+
     await pool.execute(
-      `UPDATE album_musicali SET titolo=?, fotoS3Path=?, streamingLinks=?, audioPreviewS3Path=?, ordine=?
-       WHERE id=?`,
+      `UPDATE album_musicali SET titolo=?, fotoS3Path=?, streamingLinks=?, audioPreviewS3Path=?,
+       ordine = COALESCE(?, ordine) WHERE id=?`,
       [
         titolo, fotoS3Path ?? null,
         streamingLinks ? JSON.stringify(streamingLinks) : null,
-        audioPreviewS3Path ?? null, ordine ?? 0, existing[0].id,
+        audioPreviewS3Path ?? null, ordineParam, existing[0].id,
       ]
     );
 
@@ -167,6 +182,62 @@ router.delete("/admin/music-albums/:publicId", adminOnly, async (req: Request, r
     }
 
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/music-albums/:publicId/send-newsletter — invia email agli iscritti
+// ---------------------------------------------------------------------------
+router.post("/admin/music-albums/:publicId/send-newsletter", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { titolo, descrizione } = req.body;
+    if (!titolo) return next(createHttpError(400, "titolo è obbligatorio"));
+
+    const pool = getPool();
+    const [albums] = await pool.execute(
+      "SELECT id, streamingLinks FROM album_musicali WHERE publicId = ?",
+      [req.params.publicId]
+    ) as [any[], any];
+    if (!albums.length) return next(createHttpError(404, "Album non trovato"));
+    const album = albums[0];
+
+    const links = typeof album.streamingLinks === "string"
+      ? JSON.parse(album.streamingLinks || "{}")
+      : (album.streamingLinks || {});
+    const firstLink = Object.values(links)[0] as string | undefined;
+
+    const [subscribers] = await pool.execute(
+      "SELECT email, token FROM subscribers WHERE confermato = 1"
+    ) as [any[], any];
+    if (!(subscribers as any[]).length) return next(createHttpError(400, "Nessun iscritto confermato"));
+
+    const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5175";
+
+    for (const sub of subscribers as any[]) {
+      const unsubscribeUrl = `${FRONTEND_URL}/newsletter/disiscrizione?token=${sub.token}`;
+      await sendEmail({
+        to: sub.email,
+        subject: titolo,
+        template: React.createElement(NuovoContenutoEmail, {
+          tipo: "album",
+          titolo,
+          descrizione: descrizione || undefined,
+          // immagineUrl: album.fotoS3Path || undefined,
+          ctaUrl: firstLink || undefined,
+          unsubscribeUrl,
+        }),
+      });
+    }
+
+    await pool.execute("UPDATE album_musicali SET emailSentAt = NOW() WHERE id = ?", [album.id]);
+    const [updated] = await pool.execute(
+      "SELECT emailSentAt FROM album_musicali WHERE id = ?",
+      [album.id]
+    ) as [any[], any];
+
+    res.json({ emailSentAt: updated[0].emailSentAt, sentCount: (subscribers as any[]).length });
   } catch (err) {
     next(err);
   }

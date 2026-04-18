@@ -54,11 +54,13 @@ export const NuovoContenutoEmail = ({
           {titolo}
         </Text>
 
-        {/* Descrizione */}
-        {descrizione && (
-          <Text className="text-base text-gray-600 leading-7 m-0 mb-6">
-            {descrizione}
-          </Text>
+        {/* Descrizione — supporta \n e --- come separatori */}
+        {descrizione && descrizione.split('\n').map((line, i) =>
+          line.trim() === '---'
+            ? <Hr key={i} className="border-gray-100 my-4" />
+            : line.trim()
+              ? <Text key={i} className="text-base text-gray-600 leading-relaxed m-0 mb-1">{line}</Text>
+              : <Text key={i} style={{ margin: '4px 0' }}>&nbsp;</Text>
         )}
 
         {/* CTA */}

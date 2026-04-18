@@ -1,10 +1,13 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
+import * as React from "react";
 import { getPool } from "../db/pool";
 import { authMiddleware } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 import { createHttpError } from "../middleware/error-handler";
 import { EventDate } from "../types";
+import { sendEmail } from "../../emails/send";
+import { NuovoContenutoEmail } from "../../emails/templates/nuovo-contenuto";
 
 const router = Router();
 const adminOnly = [authMiddleware, requireAdmin];
@@ -132,7 +135,7 @@ router.get("/admin/events/:publicId", adminOnly, async (req: Request, res: Respo
 // ---------------------------------------------------------------------------
 router.post("/admin/events", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { titolo, immagineS3Path, descrizioneIT, descrizioneEN, linkBiglietti, dates = [] } = req.body;
+    const { titolo, immagineS3Path, descrizioneIT, descrizioneEN, linkBiglietti, luogo, dates = [] } = req.body;
 
     if (!titolo) return next(createHttpError(400, "titolo è obbligatorio"));
     if (!dates.length) return next(createHttpError(400, "Almeno una data è obbligatoria"));
@@ -141,9 +144,9 @@ router.post("/admin/events", adminOnly, async (req: Request, res: Response, next
     const pool = getPool();
 
     const [result] = await pool.execute(
-      `INSERT INTO eventi (publicId, titolo, immagineS3Path, descrizioneIT, descrizioneEN, linkBiglietti)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [publicId, titolo, immagineS3Path ?? null, descrizioneIT ?? null, descrizioneEN ?? null, linkBiglietti ?? null]
+      `INSERT INTO eventi (publicId, titolo, immagineS3Path, descrizioneIT, descrizioneEN, linkBiglietti, luogo)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [publicId, titolo, immagineS3Path ?? null, descrizioneIT ?? null, descrizioneEN ?? null, linkBiglietti ?? null, luogo ?? null]
     ) as [any, any];
 
     await insertDates(result.insertId, dates);
@@ -165,7 +168,7 @@ router.post("/admin/events", adminOnly, async (req: Request, res: Response, next
 // ---------------------------------------------------------------------------
 router.put("/admin/events/:publicId", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { titolo, immagineS3Path, descrizioneIT, descrizioneEN, linkBiglietti, dates = [] } = req.body;
+    const { titolo, immagineS3Path, descrizioneIT, descrizioneEN, linkBiglietti, luogo, dates = [] } = req.body;
 
     if (!titolo) return next(createHttpError(400, "titolo è obbligatorio"));
     if (!dates.length) return next(createHttpError(400, "Almeno una data è obbligatoria"));
@@ -180,15 +183,66 @@ router.put("/admin/events/:publicId", adminOnly, async (req: Request, res: Respo
     const eventoId = existing[0].id;
 
     await pool.execute(
-      `UPDATE eventi SET titolo=?, immagineS3Path=?, descrizioneIT=?, descrizioneEN=?, linkBiglietti=?
+      `UPDATE eventi SET titolo=?, immagineS3Path=?, descrizioneIT=?, descrizioneEN=?, linkBiglietti=?, luogo=?
        WHERE id=?`,
-      [titolo, immagineS3Path ?? null, descrizioneIT ?? null, descrizioneEN ?? null, linkBiglietti ?? null, eventoId]
+      [titolo, immagineS3Path ?? null, descrizioneIT ?? null, descrizioneEN ?? null, linkBiglietti ?? null, luogo ?? null, eventoId]
     );
 
     await pool.execute("DELETE FROM event_dates WHERE eventoId = ?", [eventoId]);
     await insertDates(eventoId, dates);
 
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/events/:publicId/send-newsletter — invia email a tutti gli iscritti
+// ---------------------------------------------------------------------------
+router.post("/admin/events/:publicId/send-newsletter", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { titolo, descrizione } = req.body;
+    if (!titolo) return next(createHttpError(400, "titolo è obbligatorio"));
+
+    const pool = getPool();
+    const [events] = await pool.execute(
+      "SELECT id, immagineS3Path, linkBiglietti FROM eventi WHERE publicId = ?",
+      [req.params.publicId]
+    ) as [any[], any];
+    if (!events.length) return next(createHttpError(404, "Evento non trovato"));
+    const evento = events[0];
+
+    const [subscribers] = await pool.execute(
+      "SELECT email, token FROM subscribers WHERE confermato = 1"
+    ) as [any[], any];
+    if (!subscribers.length) return next(createHttpError(400, "Nessun iscritto confermato"));
+
+    const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5175";
+
+    for (const sub of subscribers as any[]) {
+      const unsubscribeUrl = `${FRONTEND_URL}/newsletter/disiscrizione?token=${sub.token}`;
+      await sendEmail({
+        to: sub.email,
+        subject: titolo,
+        template: React.createElement(NuovoContenutoEmail, {
+          tipo: "date",
+          titolo,
+          descrizione: descrizione || undefined,
+          // immagineUrl: evento.immagineS3Path || undefined,
+          ctaUrl: evento.linkBiglietti || undefined,
+          unsubscribeUrl,
+        }),
+      });
+    }
+
+    await pool.execute("UPDATE eventi SET emailSentAt = NOW() WHERE id = ?", [evento.id]);
+    const [updated] = await pool.execute(
+      "SELECT emailSentAt FROM eventi WHERE id = ?",
+      [evento.id]
+    ) as [any[], any];
+
+    res.json({ emailSentAt: updated[0].emailSentAt, sentCount: (subscribers as any[]).length });
   } catch (err) {
     next(err);
   }

@@ -111,6 +111,7 @@ router.get("/admin/photo-albums/:publicId", adminOnly, async (req: Request, res:
 
 // ---------------------------------------------------------------------------
 // POST /admin/photo-albums — crea album
+// Se `ordine` non è fornito lo assegna come MAX(ordine)+1 (album in coda).
 // ---------------------------------------------------------------------------
 router.post("/admin/photo-albums", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -120,9 +121,17 @@ router.post("/admin/photo-albums", adminOnly, async (req: Request, res: Response
     const publicId = randomUUID();
     const pool = getPool();
 
+    let ordineValue = ordine;
+    if (ordineValue === undefined || ordineValue === null) {
+      const [[{ next: nextOrdine }]] = await pool.execute(
+        "SELECT COALESCE(MAX(ordine), 0) + 1 AS `next` FROM album_fotografici"
+      ) as [any[], any];
+      ordineValue = nextOrdine;
+    }
+
     const [result] = await pool.execute(
       "INSERT INTO album_fotografici (publicId, nome, ordine) VALUES (?, ?, ?)",
-      [publicId, nome, ordine ?? 0]
+      [publicId, nome, ordineValue]
     ) as [any, any];
 
     const [rows] = await pool.execute(
@@ -138,6 +147,7 @@ router.post("/admin/photo-albums", adminOnly, async (req: Request, res: Response
 
 // ---------------------------------------------------------------------------
 // PUT /admin/photo-albums/:publicId — aggiorna album
+// `ordine` omesso → preservato (riordino via PATCH /reorder).
 // ---------------------------------------------------------------------------
 router.put("/admin/photo-albums/:publicId", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -152,9 +162,11 @@ router.put("/admin/photo-albums/:publicId", adminOnly, async (req: Request, res:
 
     if (!existing.length) return next(createHttpError(404, "Album non trovato"));
 
+    const ordineParam = ordine === undefined || ordine === null ? null : ordine;
+
     await pool.execute(
-      "UPDATE album_fotografici SET nome=?, ordine=? WHERE id=?",
-      [nome, ordine ?? 0, existing[0].id]
+      "UPDATE album_fotografici SET nome=?, ordine = COALESCE(?, ordine) WHERE id=?",
+      [nome, ordineParam, existing[0].id]
     );
 
     res.status(204).send();
@@ -219,6 +231,8 @@ router.patch("/admin/photo-albums/reorder", adminOnly, async (req: Request, res:
 
 // ---------------------------------------------------------------------------
 // POST /admin/photo-albums/:publicId/images — aggiunge immagine all'album
+// Se `ordine` non è fornito viene calcolato come MAX(ordine)+1 fra le immagini
+// dello stesso album: la nuova immagine finisce in coda alla galleria.
 // ---------------------------------------------------------------------------
 router.post("/admin/photo-albums/:publicId/images", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -233,15 +247,20 @@ router.post("/admin/photo-albums/:publicId/images", adminOnly, async (req: Reque
 
     const { ordine, s3Path, titolo, ruoloIT, ruoloEN, conIT, conEN, descrizioneIT, descrizioneEN } = req.body;
 
-    if (ordine === undefined || ordine === null) {
-      return next(createHttpError(400, "ordine è obbligatorio"));
+    let ordineValue = ordine;
+    if (ordineValue === undefined || ordineValue === null) {
+      const [[{ next: nextOrdine }]] = await pool.execute(
+        "SELECT COALESCE(MAX(ordine), 0) + 1 AS `next` FROM immagini WHERE albumId = ?",
+        [albumId]
+      ) as [any[], any];
+      ordineValue = nextOrdine;
     }
 
     const publicId = randomUUID();
     const [result] = await pool.execute(
       `INSERT INTO immagini (publicId, albumId, ordine, s3Path, titolo, ruoloIT, ruoloEN, conIT, conEN, descrizioneIT, descrizioneEN)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [publicId, albumId, ordine, s3Path ?? null, titolo ?? null, ruoloIT ?? null, ruoloEN ?? null,
+      [publicId, albumId, ordineValue, s3Path ?? null, titolo ?? null, ruoloIT ?? null, ruoloEN ?? null,
        conIT ?? null, conEN ?? null, descrizioneIT ?? null, descrizioneEN ?? null]
     ) as [any, any];
 
@@ -254,6 +273,7 @@ router.post("/admin/photo-albums/:publicId/images", adminOnly, async (req: Reque
 
 // ---------------------------------------------------------------------------
 // PUT /admin/photo-albums/:albumPublicId/images/:imagePublicId — aggiorna immagine
+// `ordine` omesso → preservato (riordino via PATCH /images/reorder).
 // ---------------------------------------------------------------------------
 router.put("/admin/photo-albums/:albumPublicId/images/:imagePublicId", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -267,14 +287,12 @@ router.put("/admin/photo-albums/:albumPublicId/images/:imagePublicId", adminOnly
 
     const { ordine, s3Path, titolo, ruoloIT, ruoloEN, conIT, conEN, descrizioneIT, descrizioneEN } = req.body;
 
-    if (ordine === undefined || ordine === null) {
-      return next(createHttpError(400, "ordine è obbligatorio"));
-    }
+    const ordineParam = ordine === undefined || ordine === null ? null : ordine;
 
     await pool.execute(
-      `UPDATE immagini SET ordine=?, s3Path=?, titolo=?, ruoloIT=?, ruoloEN=?, conIT=?, conEN=?,
+      `UPDATE immagini SET ordine = COALESCE(?, ordine), s3Path=?, titolo=?, ruoloIT=?, ruoloEN=?, conIT=?, conEN=?,
        descrizioneIT=?, descrizioneEN=? WHERE id=?`,
-      [ordine, s3Path ?? null, titolo ?? null, ruoloIT ?? null, ruoloEN ?? null,
+      [ordineParam, s3Path ?? null, titolo ?? null, ruoloIT ?? null, ruoloEN ?? null,
        conIT ?? null, conEN ?? null, descrizioneIT ?? null, descrizioneEN ?? null, existing[0].id]
     );
 

@@ -58,6 +58,8 @@ router.get("/admin/press/:publicId", adminOnly, async (req: Request, res: Respon
 
 // ---------------------------------------------------------------------------
 // POST /admin/press — crea articolo press
+// Se `ordine` non è fornito, lo assegna automaticamente come MAX(ordine)+1
+// (nuovo elemento in coda). Il drag & drop lato admin gestisce poi i riordini.
 // ---------------------------------------------------------------------------
 router.post("/admin/press", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -68,10 +70,18 @@ router.post("/admin/press", adminOnly, async (req: Request, res: Response, next:
     const publicId = randomUUID();
     const pool = getPool();
 
+    let ordineValue = ordine;
+    if (ordineValue === undefined || ordineValue === null) {
+      const [[{ next: nextOrdine }]] = await pool.execute(
+        "SELECT COALESCE(MAX(ordine), 0) + 1 AS `next` FROM press"
+      ) as [any[], any];
+      ordineValue = nextOrdine;
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO press (publicId, nomeTestata, citazioneIT, citazioneEN, nomeGiornalista, ordine)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [publicId, nomeTestata, citazioneIT ?? null, citazioneEN ?? null, nomeGiornalista ?? null, ordine ?? 0]
+      [publicId, nomeTestata, citazioneIT ?? null, citazioneEN ?? null, nomeGiornalista ?? null, ordineValue]
     ) as [any, any];
 
     const [rows] = await pool.execute("SELECT * FROM press WHERE id = ?", [result.insertId]) as [any[], any];
@@ -83,6 +93,7 @@ router.post("/admin/press", adminOnly, async (req: Request, res: Response, next:
 
 // ---------------------------------------------------------------------------
 // PUT /admin/press/:publicId — aggiorna articolo press
+// `ordine` se omesso viene preservato (riordino gestito da PATCH /reorder).
 // ---------------------------------------------------------------------------
 router.put("/admin/press/:publicId", adminOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -98,10 +109,13 @@ router.put("/admin/press/:publicId", adminOnly, async (req: Request, res: Respon
 
     if (!existing.length) return next(createHttpError(404, "Articolo press non trovato"));
 
+    // COALESCE preserva il valore esistente se `ordine` non è nel payload.
+    const ordineParam = ordine === undefined || ordine === null ? null : ordine;
+
     await pool.execute(
-      `UPDATE press SET nomeTestata=?, citazioneIT=?, citazioneEN=?, nomeGiornalista=?, ordine=?
-       WHERE id=?`,
-      [nomeTestata, citazioneIT ?? null, citazioneEN ?? null, nomeGiornalista ?? null, ordine ?? 0, existing[0].id]
+      `UPDATE press SET nomeTestata=?, citazioneIT=?, citazioneEN=?, nomeGiornalista=?,
+       ordine = COALESCE(?, ordine) WHERE id=?`,
+      [nomeTestata, citazioneIT ?? null, citazioneEN ?? null, nomeGiornalista ?? null, ordineParam, existing[0].id]
     );
 
     res.status(204).send();

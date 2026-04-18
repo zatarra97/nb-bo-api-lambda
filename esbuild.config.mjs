@@ -1,4 +1,7 @@
 import { build } from "esbuild";
+import { createWriteStream } from "fs";
+import { readFile } from "fs/promises";
+import archiver from "archiver";
 
 await build({
   entryPoints: ["src/handler.ts"],
@@ -13,4 +16,15 @@ await build({
   jsxImportSource: "react",
 });
 
-console.log("Build completata -> dist/handler.js");
+await new Promise((resolve, reject) => {
+  const output = createWriteStream("dist/handler.zip");
+  const archive = archiver("zip", { zlib: { level: 6 } });
+  output.on("close", resolve);
+  archive.on("error", reject);
+  archive.pipe(output);
+  archive.file("dist/handler.js", { name: "handler.js" });
+  archive.file("dist/handler.js.map", { name: "handler.js.map" });
+  archive.finalize();
+});
+
+console.log("Build completata -> dist/handler.js + dist/handler.zip");

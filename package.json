@@ -7,7 +7,8 @@
     "auth": "aws sso login --profile=personal",
     "dev": "tsx watch src/dev.ts",
     "build": "node esbuild.config.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "email:preview": "react-email dev --dir emails/previews --port 3001"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1029.0",
@@ -17,6 +18,7 @@
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.0.7",
     "@react-email/tailwind": "^2.0.7",
+    "@react-email/ui": "^6.0.0",
     "@vendia/serverless-express": "^4.12.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
@@ -28,12 +30,14 @@
     "react-email": "^6.0.0"
   },
   "devDependencies": {
+    "@types/archiver": "^7.0.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "archiver": "^7.0.1",
     "dotenv": "^16.4.7",
     "esbuild": "^0.24.0",
     "tsx": "^4.19.0",

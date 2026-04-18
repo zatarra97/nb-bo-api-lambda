@@ -80,3 +80,16 @@ export interface AlbumMusicale {
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+export interface ImmagineDownload {
+  id?: number;
+  publicId: string;
+  titolo: string;
+  s3Path?: string | null;
+  anno?: number | null;
+  credit?: string | null;
+  risoluzione?: string | null;
+  ordine?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
